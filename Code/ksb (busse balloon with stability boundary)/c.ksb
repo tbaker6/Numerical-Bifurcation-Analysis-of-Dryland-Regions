@@ -1,0 +1,10 @@
+parnames = {1:'nu', 2:'c', 3:'a', 4:'m', 5:'gamma', 6:'Rlam', 7:'Ilam', 8:'Rlamg', 9:'Ilamg', 10:'Rlamgg', 11:'L', 12:'Ilamgg', 13:'mu'}
+unames = {1:'X', 2:'Z', 3:'W', 4:'RA1', 5:'RA2', 6:'RA3', 7:'IA1', 8:'IA2', 9:'IA3', 10:'IAG1', 11:'IAG2', 12:'IAG3', 13:'RAGG1', 14:'RAGG2', 15:'RAGG3'}
+NDIM=   15, IPS =   4, IRS =   0, ILP =   1
+ICP=[13, 6, 7, 9, 10, 11]
+NTST=   200, NCOL=   4, IAD =   3, ISP =   2, ISW = 1, IPLT= 0, NBC= 15, NINT= 5
+NMX=  5000, NPR=   20, MXBF=   0, IID =   3, ITMX= 8, ITNW= 5, NWTN= 3, JAC= 0
+EPSL= 1e-06, EPSU = 1e-06, EPSS =0.0001
+DS  =  0.01, DSMIN= 0.00005, DSMAX=   0.001, IADS=   1
+NPAR = 13, THL =  {}, THU =  {}
+UZSTOP = {'mu': [0,1]}

@@ -1,0 +1,43 @@
+#### This file calculates and plots periodic solutions for the Klausmeier model.
+
+# Import libraries
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+## CONTINUATION ALGORITHMS ##
+r1 = run(e='k',c='k') #run the continuation along the non trivial steady state to find the HB
+r2 = run(r1('HB'), IPS = 2, ICP=['a', 11], UZSTOP = {'PERIOD': 3000}, NMX=  30000) #calculate the periodic solution at the HB
+
+
+## PLOTTING ##
+#take the a, l2, period(p) values and put them into arrays, as well as finding the output at HB
+a = r2[0]['a']
+l2 = r2[0]['L2-NORM']
+hb = r1('HB')[0]
+p = r2[0]['PERIOD']
+
+
+#set up two panels to put plots side by side
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+# Bifurcation diagram (left panel)
+ax1.plot(a, l2, 'b')
+ax1.plot(hb['a'], hb['L2-NORM'], 'ro', markersize=8, label='Hopf Bifurcation Point')
+ax1.set_xlabel('a, rainfall (bifurcation parameter)')
+ax1.set_ylabel('l2-norm of U, Z, W')
+ax1.set_title('l2-norm of periodic solution against a')
+ax1.legend()
+ax1.grid(True)
+
+# Period vs parameter (right panel)
+ax2.plot(a, p, 'b')
+ax2.set_xlabel('a, rainfall (bifurcation parameter)')
+ax2.set_ylabel('period of wave solution')
+ax2.set_title('period of periodic solution against a')
+ax2.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+

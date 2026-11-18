@@ -1,0 +1,121 @@
+#### This file plots the busse balloon for the Klausmeier model.
+
+# Import libraries
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+### FINDING THE LOCI ###
+## Hopf Bifurcation Point Locus ##
+r1 = run(e='k',c='k', NMX = 500) #run the continuation along the non trivial steady state to find the HB
+
+
+r2 = run(r1('HB'), ICP=['a', 'c'], ISW=2, UZSTOP = {'c': [0, 10], 'a':[0,3.5]}) #allow values to increase
+r3 = run(r1('HB'), ICP=['a', 'c'], ISW=2, UZSTOP = {'c': [0, 10], 'a':[0,10]}, DS = -0.01) #allow values to decrease
+
+
+## Homoclinic Connection Bifurcation Point Locus ##
+r4 = run(r1('HB'), IPS = 2, ICP=['a', 11], UZSTOP = {'PERIOD': 2000}, NMX=40000, NTST=100, NCOL=6, DSMAX= 0.5) #Run the continuation for until we reach a large period, 2000
+
+#search for the first point where the period is 2000.
+for sol in r4():
+    if sol['PERIOD'] >= 2000:
+        lab = sol['LAB']
+        break
+
+#Run a two parameter continuation of the homoclinic bifurcaton point, to give us a locus for the HBP.
+r5 = run(r4(lab), ICP=['a', 'c'], ISW=1, UZSTOP = {'c': [0, 10]},) #two param cont of this point (fixed period of ~2000)
+r6 = run(r4(lab), ICP=['a', 'c'], ISW=1, DS = -0.01, UZSTOP = {'a': [0, 3.5]}, NMX=8000, DSMAX=0.002, DSMIN=0.0001, NTST=300, NCOL=6) #two param cont of this point (fixed period of ~2000)
+
+
+## Calculate the combined loci ##
+
+#Take a and c values from each run
+a1 = np.array(r2[0]['a'])
+c1 = np.array(r2[0]['c'])
+
+a2 = np.array(r3[0]['a'])
+c2 = np.array(r3[0]['c'])
+
+a3 = np.array(r5[0]['a'])
+c3 = np.array(r5[0]['c'])
+
+a4 = np.array(r6[0]['a'])
+c4 = np.array(r6[0]['c'])
+
+
+#combine the above arrays into the hb and hc loci
+a_hbfull = np.concatenate([a2[::-1], a1])   
+c_hbfull = np.concatenate([c2[::-1], c1])
+
+a_hcfull = np.concatenate([a4[::-1], a3])   
+c_hcfull = np.concatenate([c4[::-1], c3])
+
+
+
+## WAVELENGTH CONTOURS ##
+
+targets = [30, 40, 100, 150, 200, 300] #wavelengths we wish to plot
+
+contours = []
+
+for target in targets:
+
+    # Find the solution closest to the target wavelength
+    best_lab = None
+
+    for sol in r4():
+        wl = sol['PERIOD']
+        if wl >= target:
+            best_lab = sol['LAB']
+            print(f"Target {target}: first match at PERIOD={wl}, LAB={best_lab}")
+            break
+
+    # Continue in the positive direction
+    r_pos = run(r4(best_lab), ICP=['a', 'c'], ISW=1, UZSTOP={'c': [0, 8]}, NMX=1000, DSMAX=0.01, DSMIN=0.0005)
+
+    # Continue in the negative direction
+    r_neg = run(r4(best_lab), ICP=['a', 'c'], ISW=1, DS=-0.01, UZSTOP={'a': [0, 3.5]}, NMX=1000, DSMAX=0.01, DSMIN=0.0005)
+
+    #save information for each run to the contour array
+    contours.append((target, r_pos, r_neg))
+
+
+
+## PLOTTING ##
+#collect data from the continuation algorithm for plotting
+hp = r1('HB')[0] #Hopf bifurcation point of original continuation
+
+#plot the 4 loci found by the solvers
+plt.plot(a_hbfull, c_hbfull, 'r', label = 'hopf bifurcation locus', linewidth=2.0)
+plt.plot(a_hcfull, c_hcfull, 'b', label = 'homoclinic locus')
+
+#plot the wavelength contours
+for target, r_pos, r_neg in contours:
+
+    a = np.concatenate([r_neg[0]['a'][::-1], r_pos[0]['a']])
+    c = np.concatenate([r_neg[0]['c'][::-1], r_pos[0]['c']])
+
+    plt.plot(a, c, lw=0.5, color = 'grey')
+    
+#label the wavelength contours on the plot
+plt.text(2.0, 1.6, "30", fontsize=8, color='black',
+              ha='left', va='center')
+plt.text(1.9, 2.2, "40", fontsize=8, color='black',
+              ha='left', va='center')
+plt.text(1.75, 3.6, "100", fontsize=8, color='black',
+              ha='left', va='center')
+plt.text(1.6, 4.3, "150", fontsize=8, color='black',
+              ha='left', va='center')
+plt.text(1.5, 4.8, "200", fontsize=8, color='black',
+              ha='left', va='center')
+plt.text(1.4, 5.5, "300", fontsize=8, color='black',
+              ha='left', va='center')
+
+#generate the plot
+plt.xlabel('a, rainfall')
+plt.ylabel('c, wavespeed')
+plt.title('Busse Balloon plot for Klausmeier Model')
+plt.legend()
+plt.grid()
+plt.show()

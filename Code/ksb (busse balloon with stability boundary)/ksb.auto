@@ -1,0 +1,467 @@
+# Import libraries
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import CubicSpline
+from scipy.sparse import csr_matrix
+from scipy.sparse.linalg import eigs
+
+##### PLOTTING THE BUSSE BALLOON FOR THE KLAUSMEIER MODEL #####
+
+#### STEP 1: FINDING THE LOCI ####
+
+## Hopf Bifurcation Point Locus ##
+r1 = run(e='k',c='k', NMX = 500) #run the continuation along the non trivial steady state to find the HB
+r2 = run(r1('HB'), ICP=['a', 'c'], ISW=2, UZSTOP = {'c': [0, 10], 'a':[0,3.5]}) #allow values to increase
+r3 = run(r1('HB'), ICP=['a', 'c'], ISW=2, UZSTOP = {'c': [0, 10], 'a':[0,10]}, DS = -0.01) #allow values to decrease
+
+
+## Homoclinic Connection Bifurcation Point Locus ##
+r4 = run(r1('HB'), IPS = 2, ICP=['a', 11], UZSTOP = {'PERIOD': 2000}, NMX=40000, NTST=100, NCOL=6, DSMAX= 0.5) #Run the continuation for until we reach a large period, 2000
+
+#search for the first point where the period is 2000.
+for sol in r4():
+    if sol['PERIOD'] >= 2000:
+        lab = sol['LAB']
+        break
+
+#Run a two parameter continuation of the homoclinic bifurcaton point, to give us a locus for the HBP.
+r5 = run(r4(lab), ICP=['a', 'c'], ISW=1, UZSTOP = {'c': [0, 10]},) #two param cont of this point (fixed period of ~2000)
+r6 = run(r4(lab), ICP=['a', 'c'], ISW=1, DS = -0.01, UZSTOP = {'a': [0, 3.5]}, NMX=8000, DSMAX=0.002, DSMIN=0.0001, NTST=300, NCOL=6) #two param cont of this point (fixed period of ~2000)
+
+
+## Putting results from continuations into arrays ##
+
+#Take a and c values from each run
+a1 = np.array(r2[0]['a'])
+c1 = np.array(r2[0]['c'])
+
+a2 = np.array(r3[0]['a'])
+c2 = np.array(r3[0]['c'])
+
+a3 = np.array(r5[0]['a'])
+c3 = np.array(r5[0]['c'])
+
+a4 = np.array(r6[0]['a'])
+c4 = np.array(r6[0]['c'])
+
+
+#combine the above arrays into the hb and hc loci
+a_hbfull = np.concatenate([a2[::-1], a1])   
+c_hbfull = np.concatenate([c2[::-1], c1])
+
+a_hcfull = np.concatenate([a4[::-1], a3])   
+c_hcfull = np.concatenate([c4[::-1], c3])
+
+
+
+#### STEP 2: WAVELENGTH CONTOURS ####
+
+targets = [30, 40, 50, 80, 100, 150, 200, 300] #wavelengths we wish to plot
+
+contours = []
+
+for target in targets:
+
+    # Find the first solution above the target wavelength (NOTE: COULD FIND THE ONE CLOSEST TO DESIRED WAVELENGTH FOR ACCURACY)
+    lab = None
+
+    for sol in r4():
+        wl = sol['PERIOD']
+        if wl >= target:
+            lab = sol['LAB']
+            break
+
+    # Continue in the positive direction
+    r_pos = run(r4(lab), ICP=['a', 'c'], ISW=1, UZSTOP={'c': [0, 8]}, NMX=5000, DSMAX=0.01, DSMIN=0.0005)
+
+    # Continue in the negative direction
+    r_neg = run(r4(lab), ICP=['a', 'c'], ISW=1, DS=-0.01, UZSTOP={'a': [0, 3.5]}, NMX=5000, DSMAX=0.01, DSMIN=0.0005)
+
+    #save information for each run to the contour array
+    contours.append((target, r_pos, r_neg))
+
+
+#### STEP 3A: CALCULATING PERIODIC SOLUTIONS WHEN C = 1.0 ####
+
+r1 = run(e='k',c='k', PAR={'c': 1.0}) #run the continuation along the non trivial steady state to find the HB
+r2 = run(r1('HB'), IPS = 2, ICP=['a', 11], NMX=  3000, PAR={'c': 1.0}) #calculate the periodic solution at the HB
+
+#find the label of the periodic sol with wavelength ~100
+for sol in r2():
+    if sol['PERIOD'] >= 36:
+        lab1 = sol['LAB']
+        break
+
+#collect info about solution
+hb = r1('HB')[0]
+solu = r2(lab1)
+L = solu['PAR(11)']        
+X = solu['X'] 
+Z = solu['Z']       
+W = solu['W'] 
+c_sol =  solu['c'] 
+a =  solu['a'] 
+nu =  solu['nu'] 
+m = solu['m']
+theta = np.array(solu['t'])
+X = np.array(solu['X'])
+W = np.array(solu['W'])
+z = theta * L
+
+
+#### STEP 4B: STABILITY ANALYSIS ####
+
+### PART A: GAMMA = 0 ###
+
+N = 2000 # number of points in mesh
+dz = L/N #change in z
+
+#produce arrays of X and W of length N
+Xi = CubicSpline(z, X, bc_type='periodic') #take X and split it into N points
+Wi = CubicSpline(z, W, bc_type='periodic') #take W and split it into N points
+z_uniform = np.linspace(0, L, N, endpoint=False) #set the z values
+ubar = Xi(z_uniform) #ubar values for J
+wbar = Wi(z_uniform) #wbar values for J
+zbar = CubicSpline(z, Z, bc_type='periodic')(z_uniform) #zwbar values for J
+
+
+idx = np.arange(N) #indexing along each block
+
+#first block of the big matrix
+A = np.zeros((N, N))
+A[idx, idx] = -2/(dz)**2 +2*ubar*wbar - m
+A[idx[:-1], idx[:-1]+1] = 1/(dz)**2 +c_sol/(2*dz)
+A[idx[1:], idx[1:]-1] = 1/(dz)**2 - c_sol/(2*dz)
+A[N-1, 0] = 1/dz**2 + c_sol/(2*dz)
+A[0, N-1] = 1/dz**2 - c_sol/(2*dz)
+
+#second block of the big matrix
+B = np.zeros((N,N))
+B[idx, idx] = ubar**2
+
+#third block of the big matrix
+C = np.zeros((N,N))
+C[idx, idx] = -2*wbar*ubar
+
+#fourth block of the big matrix
+D = np.zeros((N,N))
+D[idx, idx] = - (ubar**2 + 1)
+D[idx[:-1], idx[:-1]+1] = (c_sol+nu)/(2*dz)
+D[idx[1:], idx[1:]-1] = -(c_sol+nu)/(2*dz)
+D[N-1, 0] = (c_sol+nu)/(2*dz)
+D[0, N-1] = -(c_sol+nu)/(2*dz)
+
+#assemble into the J matrix
+J = np.block([[A,B], [C,D]])
+J_sparse = csr_matrix(J)
+
+#solve the eigenvector eigenvalue problem
+eigvals, eigvecs = eigs(J_sparse, k=20, sigma=0.0, which='LM')
+
+#take re and im parts of eigenvalues
+re = eigvals.real
+im = eigvals.imag
+
+
+## PART B: FINDING THE ECKHAUS STABILITY BOUDNARY ##
+#find initial eigenfunction (at lambda = 0)
+idx = np.argmin(np.abs(eigvals))
+lam = eigvals[idx]
+lamre = float(lam.real)
+lamim = float(lam.imag)
+
+#find initital eigenfunction (alpha)
+v = eigvecs[:, idx]
+
+alpha1 = v[:N]
+alpha3 = v[N:]
+alpha2 = (np.roll(alpha1, -1) - np.roll(alpha1, 1)) / (2*dz) # alpha2 = d(alpha1)/dz
+
+t_uniform = z_uniform / L
+
+norm_squared = (np.abs(alpha1)**2+ np.abs(alpha2)**2 + np.abs(alpha3)**2)
+auto_norm = np.trapezoid(norm_squared, t_uniform) #finds total area under the eigenfunction
+
+scale = 1.0 / np.sqrt(auto_norm) #finds the scaling so that the total area under the eigenfunction is 1
+
+#normalising the eigenfunction
+alpha1 *= scale
+alpha2 *= scale
+alpha3 *= scale
+
+#initial empty arrays for alpha_g and alpha_gg
+alphag1im = np.zeros(N)
+alphag2im = np.zeros(N)
+alphag3im = np.zeros(N)
+alphagg1re = np.zeros(N)
+alphagg2re = np.zeros(N)
+alphagg3re = np.zeros(N)
+
+#load in information for continuation
+ksb_init = np.array([z_uniform / L, ubar, zbar, wbar, alpha1.real, alpha2.real, alpha3.real, alpha1.imag, alpha2.imag, alpha3.imag, alphag1im, alphag2im, alphag3im, alphagg1re, alphagg2re, alphagg3re])
+ksb_init = load(ksb_init, e='ksb', c='ksb', PAR={1: nu, 2: c_sol, 3: a, 4: m, 5: 0, 6: 0, 7: 0, 8:0, 9:0, 10:0, 11: L, 12:0, 13:0.0})
+
+#run continuation to find initial values, letting my increase from 0 to 1
+r4 = run(ksb_init, NMX=4000, DS  =  0.01, DSMIN= 0.005, DSMAX=   0.01)
+
+#run along branch until Rlamgg = 0
+r5 = run(r4('UZ')[0], ICP=[3, 6, 7, 9, 10, 11], NMX=5000, DS=0.01, DSMIN=0.0005, DSMAX=0.1, UZSTOP = {'Rlamgg': 0}, PAR={'c': c_sol})
+
+#trace out the Eckhaus stability boundary (NOTE: only traces one half of the boundary since very hard for algorithm to get around the cusp)
+r6 = run(r5('UZ')[0], ICP=[2, 3, 6, 7, 9, 11], NMX=70000, DS=0.0005, DSMIN=0.00005, DSMAX=0.01, PAR={'c': c_sol}, UZSTOP = {'c' : 3.4})
+r7 = run(r6('UZ')[0], ICP=[2, 3, 6, 7, 9, 11], NMX=70000, DS=0.0005, DSMIN=0.00005, DSMAX=0.01, PAR={'c': c_sol}, UZSTOP = {'c' : 4.2})
+r8 = run(r6('UZ')[0], ICP=[2, 3, 6, 7, 9, 11], NMX=70000, DS=0.01, DSMIN=0.0005, DSMAX=0.1, UZSTOP = {'c': 6.6}, PAR={'c': c_sol}, ILP =0)
+r9 = run(r5('UZ')[0], ICP=[2, 3, 6, 7, 9, 11],  NMX=5000, DS=0.01, DSMIN=0.0005, DSMAX=0.1, PAR={'c': c_sol}, UZSTOP = {'c' : 1.2})
+r10 = run(r9('UZ')[0], ICP=[2, 3, 6, 7, 9, 11], NMX=30000, DS=-0.005, DSMIN=0.0005, DSMAX=0.02, PAR={'c': c_sol}, UZSTOP = {'c' : 0.8})
+
+
+
+#### STEP 3B: CALCULATING PERIODIC SOLUTIONS WHEN C = 1.0 ####
+r1b = run(e='k',c='k', PAR={'c': 0.8}) #run the continuation along the non trivial steady state to find the HB
+r2b = run(r1b('HB'), IPS = 2, ICP=['a', 11], NMX=  3000, PAR={'c': 0.8}) #calculate the periodic solution at the HB
+
+#find the label of the periodic sol with wavelength ~100
+for sol in r2b():
+    if sol['PERIOD'] >= 36:
+        lab1 = sol['LAB']
+        break
+
+#collect info about solution
+hb = r1b('HB')[0]
+solu = r2b(lab1)
+L = solu['PAR(11)']        
+X = solu['X'] 
+Z = solu['Z']       
+W = solu['W'] 
+c_sol =  solu['c'] 
+a =  solu['a'] 
+nu =  solu['nu'] 
+m = solu['m']
+theta = np.array(solu['t'])
+X = np.array(solu['X'])
+W = np.array(solu['W'])
+z = theta * L
+
+#### STEP 4B: STABILITY ANALYSIS ####
+### PART A: GAMMA = 0 ###
+
+N = 2000 # number of points in mesh
+dz = L/N #change in z
+
+#produce arrays of X and W of length N
+Xi = CubicSpline(z, X, bc_type='periodic') #take X and split it into N points
+Wi = CubicSpline(z, W, bc_type='periodic') #take W and split it into N points
+z_uniform = np.linspace(0, L, N, endpoint=False) #set the z values
+ubar = Xi(z_uniform) #ubar values for J
+wbar = Wi(z_uniform) #wbar values for J
+zbar = CubicSpline(z, Z, bc_type='periodic')(z_uniform)
+
+
+idx = np.arange(N) #indexing along each block
+
+
+ #first block of the big matrix
+A = np.zeros((N, N))
+A[idx, idx] = -2/(dz)**2 +2*ubar*wbar - m
+A[idx[:-1], idx[:-1]+1] = 1/(dz)**2 +c_sol/(2*dz)
+A[idx[1:], idx[1:]-1] = 1/(dz)**2 - c_sol/(2*dz)
+A[N-1, 0] = 1/dz**2 + c_sol/(2*dz)
+A[0, N-1] = 1/dz**2 - c_sol/(2*dz)
+
+#second block of the big matrix
+B = np.zeros((N,N))
+B[idx, idx] = ubar**2
+
+#third block of the big matrix
+C = np.zeros((N,N))
+C[idx, idx] = -2*wbar*ubar
+
+#fourth block of the big matrix
+D = np.zeros((N,N))
+D[idx, idx] = - (ubar**2 + 1)
+D[idx[:-1], idx[:-1]+1] = (c_sol+nu)/(2*dz)
+D[idx[1:], idx[1:]-1] = -(c_sol+nu)/(2*dz)
+D[N-1, 0] = (c_sol+nu)/(2*dz)
+D[0, N-1] = -(c_sol+nu)/(2*dz)
+
+#assemble into the J matrix
+J = np.block([[A,B], [C,D]])
+J_sparse = csr_matrix(J)
+
+
+#solve the eigenvector eigenvalue problem
+eigvals, eigvecs = eigs(J_sparse, k=20, sigma=0.0, which='LM')
+
+#take re and im parts of eigenvalues
+re = eigvals.real
+im = eigvals.imag
+
+
+## PART B: FINDING THE ECKHAUS STABILITY BOUDNARY ##
+
+#find initial eigenfunction (at lambda = 0)
+idx = np.argmin(np.abs(eigvals))
+
+lam = eigvals[idx]
+
+lamre = float(lam.real)
+lamim = float(lam.imag)
+
+#find initital eigenfunction (alpha)
+v = eigvecs[:, idx]
+alpha1 = v[:N]
+alpha3 = v[N:]
+alpha2 = (np.roll(alpha1, -1) - np.roll(alpha1, 1)) / (2*dz) # alpha2 = d(alpha1)/dz
+
+t_uniform = z_uniform / L
+
+norm_squared = (np.abs(alpha1)**2+ np.abs(alpha2)**2 + np.abs(alpha3)**2)
+auto_norm = np.trapezoid(norm_squared, t_uniform) #finds total area under the eigenfunction
+
+scale = 1.0 / np.sqrt(auto_norm) #finds the scaling so that the total area under the eigenfunction is 1
+
+#normalising the eigenfunction
+alpha1 *= scale
+alpha2 *= scale
+alpha3 *= scale
+
+#initial empty arrays for alpha_g and alpha_gg
+alphag1im = np.zeros(N)
+alphag2im = np.zeros(N)
+alphag3im = np.zeros(N)
+alphagg1re = np.zeros(N)
+alphagg2re = np.zeros(N)
+alphagg3re = np.zeros(N)
+
+
+
+#load in information for continuation
+ksb_init = np.array([z_uniform / L, ubar, zbar, wbar, alpha1.real, alpha2.real, alpha3.real, alpha1.imag, alpha2.imag, alpha3.imag, alphag1im, alphag2im, alphag3im, alphagg1re, alphagg2re, alphagg3re])
+ksb_init = load(ksb_init, e='ksb', c='ksb', PAR={1: nu, 2: c_sol, 3: a, 4: m, 5: 0, 6: 0, 7: 0, 8:0, 9:0, 10:0, 11: L, 12:0, 13:0.0})
+
+#run continuation to find initial values, letting my increase from 0 to 1
+r4b = run(ksb_init, NMX=4000, DS  =  0.01, DSMIN= 0.005, DSMAX=   0.01)
+
+#run along branch until Rlamgg = 0
+r5b = run(r4b('UZ')[0], ICP=[3, 6, 7, 9, 10, 11], NMX=5000, DS=0.01, DSMIN=0.0005, DSMAX=0.1, UZSTOP = {'Rlamgg': 0}, PAR={'c': c_sol})
+
+#trace out the Eckhaus stability boundary (NOTE: only traces one half of the boundary since very hard for algorithm to get around the cusp)
+r5ab = run(r5b('UZ')[0], ICP=[2, 3, 6, 7, 9, 11], NMX=500, DS=0.0001, DSMIN=0.00005, DSMAX=0.01, PAR={'c': c_sol})
+uz = r5ab('EP')[0]
+r6b = run(uz, ICP=[2, 3, 6, 7, 9, 11], NMX=30000, DS=0.0005, DSMIN=0.00005, DSMAX=0.001, PAR={'c': c_sol})
+r7b = run(uz, ICP=[2, 3, 6, 7, 9, 11], NMX=10000, DS=0.0005, DSMIN=0.000005, DSMAX=0.001, PAR={'c': c_sol})
+r8b = run(uz, ICP=[2, 3, 6, 7, 9, 11], NMX=10000, DS=-0.001, DSMIN=0.0005, DSMAX=0.01, PAR={'c': c_sol})
+r9b = run(r8b('EP'), ICP=[2, 3, 6, 7, 9, 11], NMX=10000, DS=-0.01, DSMIN=0.005, DSMAX=0.1, PAR={'c': c_sol})
+
+
+#### STEP 5: COLLECTING DATA FROM RUNS ####
+
+a1 = [sol['a'] for sol in r6()]
+c1 = [sol['c'] for sol in r6()]
+
+a2 = [sol['a'] for sol in r7()]
+c2 = [sol['c'] for sol in r7()]
+
+a3 = [sol['a'] for sol in r8()]
+c3 = [sol['c'] for sol in r8()]
+
+a4 = [sol['a'] for sol in r9()]
+c4 = [sol['c'] for sol in r9()]
+
+a5 = [sol['a'] for sol in r10()]
+c5 = [sol['c'] for sol in r10()]
+
+a6 = [sol['a'] for sol in r6b()]
+c6 = [sol['c'] for sol in r6b()]
+
+a7 = [sol['a'] for sol in r7b()]
+c7 = [sol['c'] for sol in r7b()]
+
+a8 = [sol['a'] for sol in r8b()]
+c8 = [sol['c'] for sol in r8b()]
+
+
+a9 = [sol['a'] for sol in r9b()]
+c9 = [sol['c'] for sol in r9b()]
+
+#saving runs to an external file (NOTE: can just plot from these in another python file instead of running all the algorithms each time)
+np.savez(
+    'busse_balloon_data_final.npz',
+    a1 = a1,
+    c1 = c1,
+    a2 = a2,
+    c2 = c2,
+    a3 = a3,
+    c3 = c3,
+    a4 = a4,
+    c4 = c4,
+    a5 = a5,
+    c5 = c5,
+    a6 = a6,
+    c6 = c6,
+    a7 = a7,
+    c7 = c7,
+    a8 = a8,
+    c8 = c8,   
+    a9 = a9,
+    c9 = c9,
+    a_hbfull = a_hbfull,
+    c_hbfull = c_hbfull,
+    a_hcfull = a_hcfull,
+    c_hcfull = c_hcfull
+)
+
+
+#### STEP 6: PLOTTING ####
+plt.figure(figsize=(8, 6))
+
+
+#plot the wavelength contours
+for i, (target, r_pos, r_neg) in enumerate(contours):
+
+    a = np.concatenate([r_neg[0]['a'][::-1], r_pos[0]['a']])
+    c = np.concatenate([r_neg[0]['c'][::-1], r_pos[0]['c']])
+
+    if i == 0:
+        plt.plot(a, c, lw=0.5, color='grey', label='wavelength contours')
+    else:
+        plt.plot(a, c, lw=0.5, color='grey')
+    
+
+#label the wavelength contours on the plot
+plt.text(2.0, 1.8, "30", fontsize=8, color='black', ha='left', va='center')
+plt.text(1.9, 2.1, "40", fontsize=8, color='black', ha='left', va='center')
+plt.text(1.85, 2.4, "50", fontsize=8, color='black', ha='left', va='center')
+plt.text(1.8, 3.1, "80", fontsize=8, color='black', ha='left', va='center')
+plt.text(1.7, 3.5, "100", fontsize=8, color='black', ha='left', va='center')
+plt.text(1.6, 4.3, "150", fontsize=8, color='black', ha='left', va='center')
+plt.text(1.5, 4.8, "200", fontsize=8, color='black', ha='left', va='center')
+plt.text(1.4, 5.5, "300", fontsize=8, color='black', ha='left', va='center')
+
+
+#plot the stability boundary
+plt.plot(a1, c1, linewidth = 2.0, color = 'grey')
+plt.plot(a2, c2, linewidth = 2.0, color = 'grey', label = 'stability boundary (Eckhaus type)')
+plt.plot(a3, c3, linewidth = 2.0, color = 'grey')
+plt.plot(a4, c4, linewidth = 2.0, color = 'grey')
+plt.plot(a5, c5, linewidth = 2.0, color = 'grey')
+plt.plot(a6, c6, linewidth = 2.0, color = 'grey')
+plt.plot(a7, c7, linewidth = 2.0, color = 'grey')
+plt.plot(a8, c8, linewidth = 2.0, color = 'grey')
+plt.plot(a9, c9, linewidth = 2.0, color = 'grey')
+
+
+#plot the existence loci
+plt.plot(a_hbfull, c_hbfull, 'r', label = 'hopf bifurcation locus', linewidth=2.0)
+plt.plot(a_hcfull, c_hcfull, 'b', label = 'homoclinic locus')
+
+
+#generate the plot
+plt.xlabel('a, rainfall')
+plt.ylabel('c, wavespeed')
+plt.xlim(0, 3.5)
+plt.ylim(0, 7)
+plt.title('Busse Balloon plot for Klausmeier Model')
+plt.legend()
+plt.grid()
+plt.show()
