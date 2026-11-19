@@ -8,4 +8,4 @@ If you have any questions at all, please do not hesitate to email me (tom.w.bake
 
 
 <h3>Acknowledgements</h3>
-Thank you so much to Dr Lukas Eiegentler for supervising this project!
+Thank you so much to Dr Lukas Eigentler for supervising this project!
