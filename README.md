@@ -8,7 +8,7 @@ If you have any questions at all, please do not hesitate to email me (tom.w.bake
 
 
 <h3>Rough outline of the project</h3>
-These notes step through the uses of AUTO-07p to analyse dynamical systems of ODEs, as well as modelling dryland vegetation patterns. \\
+These notes step through the uses of AUTO-07p to analyse dynamical systems of ODEs, as well as modelling dryland vegetation patterns. 
 
 - Section 2 outlines the basic applications of AUTO to the *Spruce Budworm Model*, such as the set up of the relevant files, variables used in continuation, and sketching bifurcation diagrams.
 - Section 3 outlines the ecology behind dryland vegetation patterns, as well as a brief outline of the models used to describe such patterns. We end this section with how these models can be used to better understand pheneomena such as *desertification*.
