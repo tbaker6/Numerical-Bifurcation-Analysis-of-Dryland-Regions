@@ -19,5 +19,6 @@ These notes step through the uses of AUTO-07p to analyse dynamical systems of OD
 Thank you so much to Dr Lukas Eigentler for supervising this project!
 
 <h3>Keep up to date!</h3>
+
 [LinkedIn](https://www.linkedin.com/in/tombaker559/)
 [Instagram](https://www.instagram.com/tom_baker_2006/)
