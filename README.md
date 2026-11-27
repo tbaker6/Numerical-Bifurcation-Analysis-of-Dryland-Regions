@@ -1,7 +1,7 @@
 <h1>Hello!</h1>
 
 This is a page dedicated to my summer research project on *Numerical Bifurcation Analysis of Dryland Regions*. Here you can find the following:
-- You can find my project write up [here](https://github.com/tbaker6/Numerical-Bifurcation-Analysis-of-Dryland-Regions/blob/main/Project%20Writeup.pdf). This contains information about the models I used, how to use continuation and how I produced all of the simulations of increasing and decreasing rainfall.
+- You can find my project write up [here]([https://github.com/tbaker6/Numerical-Bifurcation-Analysis-of-Dryland-Regions/blob/main/Project%20Writeup.pdf](https://github.com/tbaker6/Numerical-Bifurcation-Analysis-of-Dryland-Regions/blob/main/Summer%20Project%202026%20Write%20Up.pdf)). This contains information about the models I used, how to use continuation and how I produced all of the simulations of increasing and decreasing rainfall.
 - You can find the code that I used [here](https://github.com/tbaker6/Numerical-Bifurcation-Analysis-of-Dryland-Regions/tree/main/Code). Please note, in order to run the code you must download AUTO-07p, a numerical continuation software. You can find more information about this [here](https://depts.washington.edu/bdecon/workshop2012/auto-tutorial/documentation/auto07p%20manual.pdf).
 - You can also find the slides and videos from the WIMP talk, as well as my research poster for the project.
 
